@@ -2,10 +2,9 @@
 
 End-to-end parity proof for the Centre AI Agent Orchestrator.
 
-This repository contains the project foundation for a guessing game: a React,
-TypeScript and Vite setup with automated quality gates. The game itself has
-not been implemented yet. No external runtime service, secret or API is
-required to develop, test or build this project.
+This repository contains a playable number-guessing game built with React,
+TypeScript and Vite, with automated quality gates. No external runtime
+service, secret or API is required to develop, test or build this project.
 
 ## Requirements
 
