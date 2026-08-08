@@ -20,6 +20,17 @@
   font-weight: 600;
 }
 
+.app__difficulty {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.app__range {
+  font-size: 0.875rem;
+  opacity: 0.8;
+}
+
 .app__form {
   display: flex;
   flex-direction: column;
