@@ -1,3 +1,9 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 :root {
   color-scheme: light dark;
   font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
@@ -14,7 +20,13 @@ body {
   flex-direction: column;
   align-items: center;
   min-height: 100vh;
-  box-sizing: border-box;
+  width: 100%;
   padding: 2rem;
   text-align: center;
+}
+
+@media (max-width: 400px) {
+  #root {
+    padding: 1rem 0.75rem;
+  }
 }
