@@ -23,6 +23,7 @@ function selectDifficulty(label: RegExp) {
 
 afterEach(() => {
   vi.restoreAllMocks()
+  window.localStorage.clear()
 })
 
 describe('App', () => {
@@ -195,6 +196,144 @@ describe('App', () => {
 
       expect(screen.getByLabelText(/your guess/i)).not.toBeDisabled()
       expect(screen.getByText('No guesses yet.')).toBeInTheDocument()
+    })
+  })
+
+  describe('statistics', () => {
+    it('starts with zeroed statistics when nothing has been saved', () => {
+      render(<App />)
+
+      expect(screen.getByText('Wins').nextElementSibling).toHaveTextContent('0')
+      expect(screen.getByText('Losses').nextElementSibling).toHaveTextContent('0')
+      expect(screen.getByText('Current streak').nextElementSibling).toHaveTextContent('0')
+      expect(screen.getByText('Best attempts (Normal)').nextElementSibling).toHaveTextContent(
+        'Not yet won',
+      )
+    })
+
+    it('records a win, the streak and the best attempt count for the active difficulty', () => {
+      mockRandom(0) // target === NORMAL.min
+
+      render(<App />)
+      submitGuess(String(NORMAL.max)) // wrong guess
+      submitGuess(String(NORMAL.min)) // correct guess: 2 attempts used
+
+      expect(screen.getByText('Wins').nextElementSibling).toHaveTextContent('1')
+      expect(screen.getByText('Current streak').nextElementSibling).toHaveTextContent('1')
+      expect(screen.getByText('Best attempts (Normal)').nextElementSibling).toHaveTextContent('2')
+    })
+
+    it('records a loss and resets the streak', () => {
+      mockRandom(0) // target === NORMAL.min, guessing max is always wrong
+
+      render(<App />)
+      for (let attempt = 0; attempt < NORMAL.maxAttempts; attempt += 1) {
+        submitGuess(String(NORMAL.max))
+      }
+
+      expect(screen.getByText('Losses').nextElementSibling).toHaveTextContent('1')
+      expect(screen.getByText('Current streak').nextElementSibling).toHaveTextContent('0')
+    })
+
+    it('persists statistics across a simulated reload', () => {
+      mockRandom(0) // target === NORMAL.min
+
+      const { unmount } = render(<App />)
+      submitGuess(String(NORMAL.min)) // correct guess, 1 attempt
+      unmount()
+
+      render(<App />)
+
+      expect(screen.getByText('Wins').nextElementSibling).toHaveTextContent('1')
+      expect(screen.getByText('Best attempts (Normal)').nextElementSibling).toHaveTextContent('1')
+    })
+
+    it('recovers safely when saved statistics are corrupt', () => {
+      window.localStorage.setItem('guess-lab:statistics:v1', '{not valid json')
+
+      render(<App />)
+
+      expect(screen.getByText('Wins').nextElementSibling).toHaveTextContent('0')
+    })
+
+    it('recovers safely when saved statistics have an incompatible shape', () => {
+      window.localStorage.setItem(
+        'guess-lab:statistics:v1',
+        JSON.stringify({ someOldField: 'nope' }),
+      )
+
+      render(<App />)
+
+      expect(screen.getByText('Wins').nextElementSibling).toHaveTextContent('0')
+    })
+
+    it('lets the player reset all statistics', () => {
+      mockRandom(0) // target === NORMAL.min
+
+      render(<App />)
+      submitGuess(String(NORMAL.min)) // correct guess
+      expect(screen.getByText('Wins').nextElementSibling).toHaveTextContent('1')
+
+      fireEvent.click(screen.getByRole('button', { name: /reset statistics/i }))
+
+      expect(screen.getByText('Wins').nextElementSibling).toHaveTextContent('0')
+      expect(screen.getByText('Best attempts (Normal)').nextElementSibling).toHaveTextContent(
+        'Not yet won',
+      )
+    })
+  })
+
+  describe('accessibility', () => {
+    it('gives the guess input and difficulty select programmatic labels', () => {
+      render(<App />)
+
+      expect(screen.getByLabelText(/your guess/i)).toBe(screen.getByRole('spinbutton'))
+      expect(screen.getByLabelText(/difficulty/i)).toBe(screen.getByRole('combobox'))
+    })
+
+    it('announces feedback through a polite ARIA live region', () => {
+      mockRandom(0) // target === NORMAL.min
+
+      render(<App />)
+      const liveRegion = screen.getByRole('status')
+      expect(liveRegion).toHaveAttribute('aria-live', 'polite')
+
+      submitGuess(String(NORMAL.max))
+
+      expect(liveRegion).toHaveTextContent(/lower! try a smaller number/i)
+    })
+
+    it('can be played using only the keyboard', () => {
+      mockRandom(0) // target === NORMAL.min
+
+      render(<App />)
+      const input = screen.getByLabelText(/your guess/i)
+
+      input.focus()
+      expect(input).toHaveFocus()
+
+      fireEvent.change(input, { target: { value: String(NORMAL.min) } })
+      fireEvent.submit(input.closest('form') as HTMLFormElement)
+
+      expect(screen.getByRole('status')).toHaveTextContent(/correct!/i)
+
+      const newGameButton = screen.getByRole('button', { name: /new game/i })
+      newGameButton.focus()
+      expect(newGameButton).toHaveFocus()
+      fireEvent.click(newGameButton)
+
+      expect(screen.getByLabelText(/your guess/i)).not.toBeDisabled()
+    })
+
+    it('conveys guess outcomes with text and symbols, not colour alone', () => {
+      mockRandom(0) // target === NORMAL.min
+
+      render(<App />)
+      submitGuess(String(NORMAL.max))
+
+      const item = screen.getByRole('listitem')
+      expect(item).toHaveTextContent('too high')
+      expect(item.className).toContain('app__history-item--high')
     })
   })
 })

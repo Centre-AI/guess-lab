@@ -1,4 +1,4 @@
-import { useCallback, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
 import './App.css'
 import {
   DEFAULT_DIFFICULTY,
@@ -8,6 +8,14 @@ import {
   type Difficulty,
 } from './game/config'
 import { GuessingGame, type GuessResult } from './game/guessingGame'
+import {
+  createDefaultStatistics,
+  loadStatistics,
+  recordLoss,
+  recordWin,
+  saveStatistics,
+  type Statistics,
+} from './game/statistics'
 
 interface GuessEntry {
   value: number
@@ -63,6 +71,11 @@ function App() {
   const [message, setMessage] = useState(() => messageFor(null, game))
   const [attemptsRemaining, setAttemptsRemaining] = useState(() => game.attemptsRemaining)
   const [isComplete, setIsComplete] = useState(false)
+  const [statistics, setStatistics] = useState<Statistics>(() => loadStatistics())
+
+  useEffect(() => {
+    saveStatistics(statistics)
+  }, [statistics])
 
   const handleSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
@@ -83,12 +96,21 @@ function App() {
         setInputValue('')
       }
 
-      if (outcome.result === 'correct' || outcome.result === 'lost') {
+      if (outcome.result === 'correct') {
         setIsComplete(true)
+        const attemptsUsed = game.maxAttempts - outcome.attemptsRemaining
+        setStatistics((previous) => recordWin(previous, difficulty, attemptsUsed))
+      } else if (outcome.result === 'lost') {
+        setIsComplete(true)
+        setStatistics((previous) => recordLoss(previous))
       }
     },
-    [game, inputValue, isComplete],
+    [difficulty, game, inputValue, isComplete],
   )
+
+  const handleResetStatistics = useCallback(() => {
+    setStatistics(createDefaultStatistics())
+  }, [])
 
   const startNewGame = useCallback((nextDifficulty: Difficulty) => {
     const nextGame = createGame(nextDifficulty)
@@ -127,15 +149,15 @@ function App() {
         </select>
       </div>
 
-      <p className="app__range">
+      <p className="app__range" id="range-hint">
         {DIFFICULTY_LABELS[difficulty]} difficulty — range {game.min}–{game.max}, {game.maxAttempts}{' '}
         attempts
       </p>
 
-      <p className="app__status" role="status">
-        {message}
-      </p>
-      <p className="app__attempts">Attempts remaining: {attemptsRemaining}</p>
+      <div className="app__feedback" role="status" aria-live="polite" aria-atomic="true">
+        <p className="app__status">{message}</p>
+        <p className="app__attempts">Attempts remaining: {attemptsRemaining}</p>
+      </div>
 
       <form className="app__form" onSubmit={handleSubmit}>
         <label htmlFor="guess-input">
@@ -149,6 +171,7 @@ function App() {
           max={game.max}
           value={inputValue}
           disabled={isComplete}
+          aria-describedby="range-hint"
           onChange={(event) => setInputValue(event.target.value)}
         />
         <button type="submit" disabled={isComplete || inputValue.trim() === ''}>
@@ -167,12 +190,39 @@ function App() {
         ) : (
           <ul>
             {guesses.map((entry, index) => (
-              <li key={index}>
+              <li key={index} className={`app__history-item app__history-item--${entry.result}`}>
                 {entry.value} — {labelFor(entry.result)}
               </li>
             ))}
           </ul>
         )}
+      </section>
+
+      <section className="app__statistics" aria-labelledby="statistics-heading">
+        <h2 id="statistics-heading">Statistics</h2>
+        <dl className="app__statistics-list">
+          <div className="app__statistics-item">
+            <dt>Wins</dt>
+            <dd>{statistics.wins}</dd>
+          </div>
+          <div className="app__statistics-item">
+            <dt>Losses</dt>
+            <dd>{statistics.losses}</dd>
+          </div>
+          <div className="app__statistics-item">
+            <dt>Current streak</dt>
+            <dd>{statistics.currentStreak}</dd>
+          </div>
+          {DIFFICULTIES.map((level) => (
+            <div className="app__statistics-item" key={level}>
+              <dt>Best attempts ({DIFFICULTY_LABELS[level]})</dt>
+              <dd>{statistics.bestAttemptsByDifficulty[level] ?? 'Not yet won'}</dd>
+            </div>
+          ))}
+        </dl>
+        <button type="button" className="app__reset-statistics" onClick={handleResetStatistics}>
+          Reset statistics
+        </button>
       </section>
     </main>
   )
